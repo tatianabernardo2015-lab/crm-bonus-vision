@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/gatilho-anual",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-test-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Testes automatizados
+        run: npm test
+
+      - name: Build de produção
+        run: npm run build
+        env:
+          # Variáveis fictícias — suficientes para o build compilar (o Next
+          # só valida a presença das env vars, não faz chamadas reais ao
+          # Supabase durante `next build`). Não use estes valores em produção.
+          NEXT_PUBLIC_SUPABASE_URL: https://exemplo-ci.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: chave-fake-para-o-build-de-ci
+          SUPABASE_SERVICE_ROLE_KEY: chave-fake-para-o-build-de-ci
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
