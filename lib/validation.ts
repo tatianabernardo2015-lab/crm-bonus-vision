@@ -41,11 +41,12 @@ export const configuracoesSchema = z.object({
 
 const linhaImportacaoSchema = z.object({
   nome: z.string().min(2),
-  telefone: z.string().min(8),
+  telefone: z.string().optional().or(z.literal('')),
   email: z.string().email().optional().or(z.literal('')),
-  oftalmologista_preferido: z.string().min(2),
-  valor_compra: z.number().positive(),
-  data_compra: z.string().optional(), // ISO date opcional; se ausente, usa a data do import
+  oftalmologista_preferido: z.string().optional().or(z.literal('')),
+  oftalmologista_telefone: z.string().optional().or(z.literal('')),
+  valor_compra: z.number().positive().optional(),
+  data_compra: z.string().optional(),
 });
 
 export const importarVendasSchema = z.object({

@@ -4,15 +4,23 @@ import { useState, useRef } from 'react';
 import { Upload, X, FileSpreadsheet, CheckCircle2, AlertTriangle, Loader2, ArrowRight } from 'lucide-react';
 import { GlassPanel } from './GlassPanel';
 
-// -------------------------- Detecção de colunas --------------------------
+// -------------------------- Deteccao de colunas --------------------------
 
-type CampoAlvo = 'nome' | 'telefone' | 'email' | 'oftalmologista_preferido' | 'valor_compra' | 'data_compra';
+type CampoAlvo =
+  | 'nome'
+  | 'telefone'
+  | 'email'
+  | 'oftalmologista_preferido'
+  | 'oftalmologista_telefone'
+  | 'valor_compra'
+  | 'data_compra';
 
 const CAMPOS: { id: CampoAlvo; label: string; obrigatorio: boolean; sinonimos: string[] }[] = [
   { id: 'nome', label: 'Nome do cliente', obrigatorio: true, sinonimos: ['nome', 'cliente', 'nome do cliente', 'nome cliente', 'paciente'] },
-  { id: 'telefone', label: 'WhatsApp / telefone', obrigatorio: true, sinonimos: ['telefone', 'whatsapp', 'celular', 'fone', 'contato', 'tel'] },
-  { id: 'oftalmologista_preferido', label: 'Oftalmologista', obrigatorio: true, sinonimos: ['oftalmologista', 'medico', 'médico', 'doutor', 'dr', 'oftalmologista preferido', 'profissional'] },
-  { id: 'valor_compra', label: 'Valor da compra', obrigatorio: true, sinonimos: ['valor', 'valor da compra', 'total', 'valor compra', 'preco', 'preço', 'valor total'] },
+  { id: 'telefone', label: 'WhatsApp / telefone', obrigatorio: false, sinonimos: ['telefone', 'whatsapp', 'celular', 'fone', 'contato', 'tel'] },
+  { id: 'oftalmologista_preferido', label: 'Oftalmologista', obrigatorio: false, sinonimos: ['oftalmologista', 'medico', 'médico', 'doutor', 'dr', 'oftalmologista preferido', 'profissional'] },
+  { id: 'oftalmologista_telefone', label: 'Telefone do oftalmologista', obrigatorio: false, sinonimos: ['telefone oftalmologista', 'telefone medico', 'celular medico', 'whatsapp medico', 'contato medico', 'fone medico'] },
+  { id: 'valor_compra', label: 'Valor da compra', obrigatorio: false, sinonimos: ['valor', 'valor da compra', 'total', 'valor compra', 'preco', 'preço', 'valor total'] },
   { id: 'email', label: 'E-mail (opcional)', obrigatorio: false, sinonimos: ['email', 'e-mail'] },
   { id: 'data_compra', label: 'Data da compra (opcional)', obrigatorio: false, sinonimos: ['data', 'data da compra', 'data compra', 'dt compra'] },
 ];
@@ -36,14 +44,15 @@ function detectarMapeamento(headers: string[]): Record<CampoAlvo, string | null>
   return mapa;
 }
 
-function parseValor(bruto: string): number {
-  if (!bruto) return NaN;
+function parseValor(bruto: string): number | undefined {
+  if (!bruto) return undefined;
   const limpo = bruto
     .replace(/[Rr]\$/g, '')
     .trim()
     .replace(/\./g, '')
     .replace(',', '.');
-  return parseFloat(limpo);
+  const numero = parseFloat(limpo);
+  return isNaN(numero) || numero <= 0 ? undefined : numero;
 }
 
 function parseData(bruto: string): string | undefined {
@@ -96,13 +105,13 @@ export function ImportarVendasModal({
         cabecalhos = resultado.meta.fields ?? [];
       } else {
         setErroArquivo(
-          'Por enquanto só aceito arquivos .csv. Se o seu arquivo é .xlsx ou .xls, abra ele no Excel e use "Arquivo → Salvar como → CSV (separado por vírgulas)", depois envie o CSV gerado.'
+          'Por enquanto so aceito arquivos .csv. Se o seu arquivo e .xlsx ou .xls, abra ele no Excel e use "Arquivo -> Salvar como -> CSV (separado por virgulas)", depois envie o CSV gerado.'
         );
         return;
       }
 
       if (dados.length === 0) {
-        setErroArquivo('O arquivo não tem nenhuma linha de dados.');
+        setErroArquivo('O arquivo nao tem nenhuma linha de dados.');
         return;
       }
 
@@ -111,7 +120,7 @@ export function ImportarVendasModal({
       setMapeamento(detectarMapeamento(cabecalhos));
       setEtapa('conferir');
     } catch {
-      setErroArquivo('Não consegui ler esse arquivo. Confira se ele não está corrompido ou aberto em outro programa.');
+      setErroArquivo('Nao consegui ler esse arquivo. Confira se ele nao esta corrompido ou aberto em outro programa.');
     }
   };
 
@@ -128,10 +137,13 @@ export function ImportarVendasModal({
         oftalmologista_preferido: mapeamento.oftalmologista_preferido
           ? String(linha[mapeamento.oftalmologista_preferido] ?? '').trim()
           : '',
-        valor_compra: mapeamento.valor_compra ? parseValor(String(linha[mapeamento.valor_compra] ?? '')) : NaN,
+        oftalmologista_telefone: mapeamento.oftalmologista_telefone
+          ? String(linha[mapeamento.oftalmologista_telefone] ?? '').replace(/\D/g, '')
+          : '',
+        valor_compra: mapeamento.valor_compra ? parseValor(String(linha[mapeamento.valor_compra] ?? '')) : undefined,
         data_compra: mapeamento.data_compra ? parseData(String(linha[mapeamento.data_compra] ?? '')) : undefined,
       }))
-      .filter((l) => l.nome && l.telefone); // ignora linhas totalmente vazias
+      .filter((l) => l.nome); // ignora linhas sem nome
 
     try {
       const resposta = await fetch('/api/vendas/importar', {
@@ -151,7 +163,7 @@ export function ImportarVendasModal({
       setEtapa('resultado');
       onImportado();
     } catch {
-      setErroArquivo('Falha de conexão ao enviar os dados. Tente novamente.');
+      setErroArquivo('Falha de conexao ao enviar os dados. Tente novamente.');
       setEtapa('conferir');
     }
   };
@@ -181,7 +193,7 @@ export function ImportarVendasModal({
               <div>
                 <p className="mb-4 text-xs text-muted">
                   Exporte a lista de vendas do Shop9 em CSV e envie aqui. O sistema tenta identificar as colunas
-                  automaticamente — você confirma tudo antes de qualquer coisa ser salva. Se seu arquivo for
+                  automaticamente - voce confirma tudo antes de qualquer coisa ser salva. Se seu arquivo for
                   Excel (.xlsx), abra no Excel e salve como CSV primeiro.
                 </p>
                 <button
@@ -211,7 +223,8 @@ export function ImportarVendasModal({
               <div>
                 <p className="mb-3 text-xs text-muted">
                   {linhas.length} linha{linhas.length === 1 ? '' : 's'} encontrada{linhas.length === 1 ? '' : 's'}.
-                  Confira se cada campo está mapeado para a coluna certa do seu arquivo:
+                  Confira se cada campo esta mapeado para a coluna certa do seu arquivo. Apenas o nome e
+                  obrigatorio - os demais podem ficar em branco e ser preenchidos manualmente depois.
                 </p>
 
                 <div className="mb-4 space-y-2">
@@ -229,7 +242,7 @@ export function ImportarVendasModal({
                         className="flex-1 rounded-lg border border-line bg-white/[0.03] px-3 py-2 text-xs text-ivory outline-none"
                       >
                         <option value="" style={{ color: '#000' }}>
-                          {campo.obrigatorio ? '— selecione uma coluna —' : '— nenhuma —'}
+                          {campo.obrigatorio ? '- selecione uma coluna -' : '- nenhuma -'}
                         </option>
                         {headers.map((h) => (
                           <option key={h} value={h} style={{ color: '#000' }}>
@@ -273,8 +286,8 @@ export function ImportarVendasModal({
                   </table>
                   {linhas.length > 5 && (
                     <p className="px-2 py-1.5 text-[10px] text-muted">
-                      + {linhas.length - 5} linha{linhas.length - 5 === 1 ? '' : 's'} não mostrada
-                      {linhas.length - 5 === 1 ? '' : 's'} aqui (mas serão todas importadas)
+                      + {linhas.length - 5} linha{linhas.length - 5 === 1 ? '' : 's'} nao mostrada
+                      {linhas.length - 5 === 1 ? '' : 's'} aqui (mas serao todas importadas)
                     </p>
                   )}
                 </div>
@@ -306,7 +319,7 @@ export function ImportarVendasModal({
             {etapa === 'enviando' && (
               <div className="flex flex-col items-center justify-center gap-3 py-12">
                 <Loader2 size={24} className="animate-spin text-sapphire" />
-                <p className="text-sm text-muted">Importando {linhas.length} vendas, aguarde…</p>
+                <p className="text-sm text-muted">Importando {linhas.length} vendas, aguarde...</p>
               </div>
             )}
 

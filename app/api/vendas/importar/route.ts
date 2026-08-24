@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   const parsed = importarVendasSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ erro: 'Dados inválidos', detalhes: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ erro: 'Dados invalidos', detalhes: parsed.error.flatten() }, { status: 400 });
   }
 
   const supabase = await createClient();
@@ -25,17 +25,25 @@ export async function POST(request: NextRequest) {
     try {
       const clienteId = await encontrarOuCriarCliente(supabase, linha);
 
-      const { error: erroTransacao } = await supabase.from('transacoes').insert({
-        cliente_id: clienteId,
-        valor_compra: linha.valor_compra,
-        data_compra: linha.data_compra || new Date().toISOString(),
-        // data_validade_bonus é preenchida pelo trigger fn_calcular_bonus_transacao
-        data_validade_bonus: linha.data_compra || new Date().toISOString(),
-      });
+      if (linha.valor_compra && linha.valor_compra > 0) {
+        const { error: erroTransacao } = await supabase.from('transacoes').insert({
+          cliente_id: clienteId,
+          valor_compra: linha.valor_compra,
+          data_compra: linha.data_compra || new Date().toISOString(),
+          data_validade_bonus: linha.data_compra || new Date().toISOString(),
+        });
 
-      if (erroTransacao) throw new Error(erroTransacao.message);
+        if (erroTransacao) throw new Error(erroTransacao.message);
 
-      resultados.push({ linha: i + 1, nome: linha.nome, status: 'sucesso' });
+        resultados.push({ linha: i + 1, nome: linha.nome, status: 'sucesso' });
+      } else {
+        resultados.push({
+          linha: i + 1,
+          nome: linha.nome,
+          status: 'sucesso',
+          mensagem: 'Cliente cadastrado sem valor de compra - preencha a venda manualmente depois.',
+        });
+      }
     } catch (err) {
       resultados.push({
         linha: i + 1,
@@ -57,30 +65,34 @@ async function encontrarOuCriarCliente(
   supabase: any,
   linha: LinhaImportacao
 ): Promise<string> {
-  const { data: existente } = await supabase
-    .from('clientes')
-    .select('id, arquivado')
-    .eq('telefone', linha.telefone)
-    .maybeSingle();
-
-  if (existente) {
-    await supabase
+  if (linha.telefone) {
+    const { data: existente } = await supabase
       .from('clientes')
-      .update({
-        oftalmologista_preferido: linha.oftalmologista_preferido,
-        ...(existente.arquivado ? { arquivado: false } : {}),
-      })
-      .eq('id', existente.id);
-    return existente.id;
+      .select('id, arquivado')
+      .eq('telefone', linha.telefone)
+      .maybeSingle();
+
+    if (existente) {
+      await supabase
+        .from('clientes')
+        .update({
+          ...(linha.oftalmologista_preferido ? { oftalmologista_preferido: linha.oftalmologista_preferido } : {}),
+          ...(linha.oftalmologista_telefone ? { oftalmologista_telefone: linha.oftalmologista_telefone } : {}),
+          ...(existente.arquivado ? { arquivado: false } : {}),
+        })
+        .eq('id', existente.id);
+      return existente.id;
+    }
   }
 
   const { data: novo, error } = await supabase
     .from('clientes')
     .insert({
       nome: linha.nome,
-      telefone: linha.telefone,
+      telefone: linha.telefone || '',
       email: linha.email || null,
-      oftalmologista_preferido: linha.oftalmologista_preferido,
+      oftalmologista_preferido: linha.oftalmologista_preferido || '',
+      oftalmologista_telefone: linha.oftalmologista_telefone || null,
     })
     .select('id')
     .single();
