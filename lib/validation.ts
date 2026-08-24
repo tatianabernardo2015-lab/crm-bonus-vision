@@ -40,7 +40,7 @@ export const configuracoesSchema = z.object({
 });
 
 const linhaImportacaoSchema = z.object({
-  nome: z.string().min(2),
+  nome: z.string().optional().or(z.literal('')),
   telefone: z.string().optional().or(z.literal('')),
   email: z.string().email().optional().or(z.literal('')),
   oftalmologista_preferido: z.string().optional().or(z.literal('')),

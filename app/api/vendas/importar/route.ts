@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
 
   for (let i = 0; i < parsed.data.linhas.length; i++) {
     const linha: LinhaImportacao = parsed.data.linhas[i];
+    const nomeExibicao = linha.nome || '(sem nome)';
     try {
       const clienteId = await encontrarOuCriarCliente(supabase, linha);
 
@@ -35,19 +36,19 @@ export async function POST(request: NextRequest) {
 
         if (erroTransacao) throw new Error(erroTransacao.message);
 
-        resultados.push({ linha: i + 1, nome: linha.nome, status: 'sucesso' });
+        resultados.push({ linha: i + 1, nome: nomeExibicao, status: 'sucesso' });
       } else {
         resultados.push({
           linha: i + 1,
-          nome: linha.nome,
+          nome: nomeExibicao,
           status: 'sucesso',
-          mensagem: 'Cliente cadastrado sem valor de compra - preencha a venda manualmente depois.',
+          mensagem: 'Cliente cadastrado com dados incompletos - preencha manualmente depois.',
         });
       }
     } catch (err) {
       resultados.push({
         linha: i + 1,
-        nome: linha.nome,
+        nome: nomeExibicao,
         status: 'erro',
         mensagem: err instanceof Error ? err.message : 'Falha desconhecida',
       });
@@ -88,7 +89,7 @@ async function encontrarOuCriarCliente(
   const { data: novo, error } = await supabase
     .from('clientes')
     .insert({
-      nome: linha.nome,
+      nome: linha.nome || 'Cliente sem nome',
       telefone: linha.telefone || '',
       email: linha.email || null,
       oftalmologista_preferido: linha.oftalmologista_preferido || '',
