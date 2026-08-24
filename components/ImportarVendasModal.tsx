@@ -16,7 +16,7 @@ type CampoAlvo =
   | 'data_compra';
 
 const CAMPOS: { id: CampoAlvo; label: string; obrigatorio: boolean; sinonimos: string[] }[] = [
-  { id: 'nome', label: 'Nome do cliente', obrigatorio: true, sinonimos: ['nome', 'cliente', 'nome do cliente', 'nome cliente', 'paciente'] },
+  { id: 'nome', label: 'Nome do cliente', obrigatorio: false, sinonimos: ['nome', 'cliente', 'nome do cliente', 'nome cliente', 'paciente'] },
   { id: 'telefone', label: 'WhatsApp / telefone', obrigatorio: false, sinonimos: ['telefone', 'whatsapp', 'celular', 'fone', 'contato', 'tel'] },
   { id: 'oftalmologista_preferido', label: 'Oftalmologista', obrigatorio: false, sinonimos: ['oftalmologista', 'medico', 'médico', 'doutor', 'dr', 'oftalmologista preferido', 'profissional'] },
   { id: 'oftalmologista_telefone', label: 'Telefone do oftalmologista', obrigatorio: false, sinonimos: ['telefone oftalmologista', 'telefone medico', 'celular medico', 'whatsapp medico', 'contato medico', 'fone medico'] },
@@ -143,7 +143,15 @@ export function ImportarVendasModal({
         valor_compra: mapeamento.valor_compra ? parseValor(String(linha[mapeamento.valor_compra] ?? '')) : undefined,
         data_compra: mapeamento.data_compra ? parseData(String(linha[mapeamento.data_compra] ?? '')) : undefined,
       }))
-      .filter((l) => l.nome); // ignora linhas sem nome
+      .filter(
+        (l) =>
+          l.nome ||
+          l.telefone ||
+          l.email ||
+          l.oftalmologista_preferido ||
+          l.oftalmologista_telefone ||
+          l.valor_compra
+      );
 
     try {
       const resposta = await fetch('/api/vendas/importar', {
@@ -223,8 +231,8 @@ export function ImportarVendasModal({
               <div>
                 <p className="mb-3 text-xs text-muted">
                   {linhas.length} linha{linhas.length === 1 ? '' : 's'} encontrada{linhas.length === 1 ? '' : 's'}.
-                  Confira se cada campo esta mapeado para a coluna certa do seu arquivo. Apenas o nome e
-                  obrigatorio - os demais podem ficar em branco e ser preenchidos manualmente depois.
+                  Confira se cada campo esta mapeado para a coluna certa do seu arquivo. Nenhum campo e obrigatorio
+                  - o que ficar em branco pode ser preenchido manualmente depois.
                 </p>
 
                 <div className="mb-4 space-y-2">
@@ -242,7 +250,7 @@ export function ImportarVendasModal({
                         className="flex-1 rounded-lg border border-line bg-white/[0.03] px-3 py-2 text-xs text-ivory outline-none"
                       >
                         <option value="" style={{ color: '#000' }}>
-                          {campo.obrigatorio ? '- selecione uma coluna -' : '- nenhuma -'}
+                          - nenhuma -
                         </option>
                         {headers.map((h) => (
                           <option key={h} value={h} style={{ color: '#000' }}>
