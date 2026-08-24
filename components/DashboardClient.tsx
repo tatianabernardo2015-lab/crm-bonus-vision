@@ -7,6 +7,7 @@ import { SyncIndicator, type SyncState } from './SyncIndicator';
 import { MetricCard } from './MetricCard';
 import { CadastroModal } from './CadastroModal';
 import { EditarClienteModal } from './EditarClienteModal';
+import { ImportarVendasModal } from './ImportarVendasModal';
 import { ClientesList } from './ClientesList';
 import { ClientesView } from './ClientesView';
 import { FilaRetorno } from './FilaRetorno';
@@ -53,6 +54,8 @@ export function DashboardClient({
 
   const [activeNav, setActiveNav] = useState<NavId>('dashboard');
   const [modalOpen, setModalOpen] = useState(false);
+  const [importarOpen, setImportarOpen] = useState(false);
+  const [sinalAtualizacaoClientes, setSinalAtualizacaoClientes] = useState(0);
   const [clienteEditando, setClienteEditando] = useState<Cliente | null>(null);
   const [syncState, setSyncState] = useState<SyncState>('saved');
 
@@ -97,6 +100,13 @@ export function DashboardClient({
       supabase.removeChannel(canal);
     };
   }, [supabase, anunciarSync]);
+
+  const handleImportado = async () => {
+    anunciarSync();
+    setSinalAtualizacaoClientes((n) => n + 1);
+    const { data } = await supabase.from('vw_metricas_dashboard').select('*').single();
+    if (data) setMetricas(data as MetricasDashboard);
+  };
 
   const handleNovaVenda = async (venda: NovaVendaInput) => {
     anunciarSync();
@@ -279,6 +289,9 @@ export function DashboardClient({
         onClose={() => setClienteEditando(null)}
         onSalvar={handleEditarCliente}
       />
+      {importarOpen && (
+        <ImportarVendasModal onClose={() => setImportarOpen(false)} onImportado={handleImportado} />
+      )}
 
       <Sidebar active={activeNav} onChange={setActiveNav} emailUsuario={emailUsuario} />
 
@@ -346,6 +359,8 @@ export function DashboardClient({
               temMaisInicial={totalClientes > clientesIniciais.length}
               onEditar={(cliente) => setClienteEditando(cliente)}
               onArquivar={handleArquivarCliente}
+              onAbrirImportacao={() => setImportarOpen(true)}
+              sinalAtualizacao={sinalAtualizacaoClientes}
             />
           )}
 

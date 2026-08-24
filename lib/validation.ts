@@ -38,3 +38,18 @@ export const configuracoesSchema = z.object({
   dias_validade_bonus: z.number().int().positive(),
   dias_gatilho_retorno: z.number().int().positive(),
 });
+
+const linhaImportacaoSchema = z.object({
+  nome: z.string().min(2),
+  telefone: z.string().min(8),
+  email: z.string().email().optional().or(z.literal('')),
+  oftalmologista_preferido: z.string().min(2),
+  valor_compra: z.number().positive(),
+  data_compra: z.string().optional(), // ISO date opcional; se ausente, usa a data do import
+});
+
+export const importarVendasSchema = z.object({
+  linhas: z.array(linhaImportacaoSchema).min(1).max(1000),
+});
+
+export type LinhaImportacao = z.infer<typeof linhaImportacaoSchema>;

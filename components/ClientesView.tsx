@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Phone, Stethoscope, ChevronDown, Mail, Pencil, Archive, ArchiveRestore, Loader2, Download } from 'lucide-react';
+import { Search, Phone, Stethoscope, ChevronDown, Mail, Pencil, Archive, ArchiveRestore, Loader2, Download, Upload } from 'lucide-react';
 import { GlassPanel } from './GlassPanel';
 import { formatarData, formatarMoeda, cn } from '@/lib/utils';
 import type { Cliente, Transacao } from '@/types';
@@ -144,12 +144,16 @@ export function ClientesView({
   temMaisInicial,
   onEditar,
   onArquivar,
+  onAbrirImportacao,
+  sinalAtualizacao,
 }: {
   clientesIniciais: Cliente[];
   totalInicial: number;
   temMaisInicial: boolean;
   onEditar: (cliente: Cliente) => void;
   onArquivar: (cliente: Cliente, arquivado: boolean) => Promise<void> | void;
+  onAbrirImportacao: () => void;
+  sinalAtualizacao?: number;
 }) {
   const [busca, setBusca] = useState('');
   const [incluirArquivados, setIncluirArquivados] = useState(false);
@@ -189,6 +193,16 @@ export function ClientesView({
     };
   }, [busca, incluirArquivados]);
 
+  const primeiroSinal = useRef(true);
+  useEffect(() => {
+    if (primeiroSinal.current) {
+      primeiroSinal.current = false;
+      return;
+    }
+    buscar(busca, incluirArquivados);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sinalAtualizacao]);
+
   const carregarMais = async () => {
     setCarregandoMais(true);
     try {
@@ -220,6 +234,13 @@ export function ClientesView({
           Clientes cadastrados <span className="text-muted">({total})</span>
         </h2>
         <div className="flex items-center gap-2">
+          <button
+            onClick={onAbrirImportacao}
+            className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[11px] text-muted transition-colors hover:text-ivory"
+          >
+            <Upload size={12} />
+            Importar
+          </button>
           {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- download de arquivo, não navegação */}
           <a
             href="/api/clientes/export"

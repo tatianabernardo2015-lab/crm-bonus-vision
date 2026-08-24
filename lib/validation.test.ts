@@ -7,6 +7,7 @@ import {
   transacaoCancelarSchema,
   agendamentoStatusSchema,
   configuracoesSchema,
+  importarVendasSchema,
 } from './validation';
 
 describe('vendaSchema', () => {
@@ -165,5 +166,46 @@ describe('configuracoesSchema', () => {
 
   it('rejeita dias_gatilho_retorno zero ou negativo', () => {
     expect(configuracoesSchema.safeParse({ ...configValida, dias_gatilho_retorno: 0 }).success).toBe(false);
+  });
+});
+
+describe('importarVendasSchema', () => {
+  const linhaValida = {
+    nome: 'Camila Rangel',
+    telefone: '21999990000',
+    oftalmologista_preferido: 'Dra. Fernanda Reis',
+    valor_compra: 250,
+  };
+
+  it('aceita um lote com uma linha válida', () => {
+    expect(importarVendasSchema.safeParse({ linhas: [linhaValida] }).success).toBe(true);
+  });
+
+  it('aceita várias linhas válidas', () => {
+    expect(
+      importarVendasSchema.safeParse({ linhas: [linhaValida, { ...linhaValida, telefone: '21988887777' }] }).success
+    ).toBe(true);
+  });
+
+  it('rejeita um lote vazio', () => {
+    expect(importarVendasSchema.safeParse({ linhas: [] }).success).toBe(false);
+  });
+
+  it('rejeita mais de 1000 linhas', () => {
+    const linhas = Array.from({ length: 1001 }, () => linhaValida);
+    expect(importarVendasSchema.safeParse({ linhas }).success).toBe(false);
+  });
+
+  it('aceita data_compra opcional em formato ISO', () => {
+    expect(
+      importarVendasSchema.safeParse({ linhas: [{ ...linhaValida, data_compra: '2026-05-10T00:00:00.000Z' }] })
+        .success
+    ).toBe(true);
+  });
+
+  it('rejeita uma linha com valor_compra inválido dentro do lote', () => {
+    expect(
+      importarVendasSchema.safeParse({ linhas: [linhaValida, { ...linhaValida, valor_compra: -10 }] }).success
+    ).toBe(false);
   });
 });
