@@ -25,6 +25,8 @@ const CAMPOS: { id: CampoAlvo; label: string; obrigatorio: boolean; sinonimos: s
   { id: 'data_compra', label: 'Data da compra (opcional)', obrigatorio: false, sinonimos: ['data', 'data da compra', 'data compra', 'dt compra'] },
 ];
 
+const TAMANHO_LOTE = 300;
+
 function normalizar(texto: string): string {
   return texto
     .toLowerCase()
@@ -68,6 +70,16 @@ function parseData(bruto: string): string | undefined {
 
 // ------------------------------- Componente -------------------------------
 
+interface LinhaFormatada {
+  nome: string;
+  telefone: string;
+  email: string;
+  oftalmologista_preferido: string;
+  oftalmologista_telefone: string;
+  valor_compra: number | undefined;
+  data_compra: string | undefined;
+}
+
 interface ResultadoImportacao {
   total: number;
   sucesso: number;
@@ -87,6 +99,7 @@ export function ImportarVendasModal({
   const [mapeamento, setMapeamento] = useState<Record<CampoAlvo, string | null>>({} as Record<CampoAlvo, string | null>);
   const [erroArquivo, setErroArquivo] = useState('');
   const [resultado, setResultado] = useState<ResultadoImportacao | null>(null);
+  const [progresso, setProgresso] = useState<{ loteAtual: number; totalLotes: number; enviados: number; totalLinhas: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const processarArquivo = async (arquivo: File) => {
@@ -127,9 +140,10 @@ export function ImportarVendasModal({
   const camposFaltando = CAMPOS.filter((c) => c.obrigatorio && !mapeamento[c.id]);
 
   const confirmarImportacao = async () => {
+    setErroArquivo('');
     setEtapa('enviando');
 
-    const linhasFormatadas = linhas
+    const linhasFormatadas: LinhaFormatada[] = linhas
       .map((linha) => ({
         nome: mapeamento.nome ? String(linha[mapeamento.nome] ?? '').trim() : '',
         telefone: mapeamento.telefone ? String(linha[mapeamento.telefone] ?? '').replace(/\D/g, '') : '',
@@ -153,26 +167,55 @@ export function ImportarVendasModal({
           l.valor_compra
       );
 
-    try {
-      const resposta = await fetch('/api/vendas/importar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ linhas: linhasFormatadas }),
-      });
-      const dados = await resposta.json();
+    const totalLotes = Math.max(1, Math.ceil(linhasFormatadas.length / TAMANHO_LOTE));
+    const acumulado: ResultadoImportacao = { total: 0, sucesso: 0, erros: [] };
 
-      if (!resposta.ok) {
-        setErroArquivo(dados.erro || 'Falha ao importar. Confira os valores e tente novamente.');
-        setEtapa('conferir');
-        return;
+    try {
+      for (let lote = 0; lote < totalLotes; lote++) {
+        const inicio = lote * TAMANHO_LOTE;
+        const pedaco = linhasFormatadas.slice(inicio, inicio + TAMANHO_LOTE);
+        if (pedaco.length === 0) continue;
+
+        setProgresso({
+          loteAtual: lote + 1,
+          totalLotes,
+          enviados: inicio,
+          totalLinhas: linhasFormatadas.length,
+        });
+
+        const resposta = await fetch('/api/vendas/importar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ linhas: pedaco }),
+        });
+        const dados = await resposta.json();
+
+        if (!resposta.ok) {
+          throw new Error(dados.erro || `Falha ao importar o lote ${lote + 1} de ${totalLotes}.`);
+        }
+
+        acumulado.total += dados.total;
+        acumulado.sucesso += dados.sucesso;
+        acumulado.erros.push(
+          ...dados.erros.map((e: { linha: number; nome: string; mensagem?: string }) => ({
+            ...e,
+            linha: e.linha + inicio,
+          }))
+        );
       }
 
-      setResultado(dados);
+      setResultado(acumulado);
       setEtapa('resultado');
       onImportado();
-    } catch {
-      setErroArquivo('Falha de conexao ao enviar os dados. Tente novamente.');
+    } catch (err) {
+      const jaImportadas = acumulado.sucesso;
+      setErroArquivo(
+        (err instanceof Error ? err.message : 'Falha de conexao ao enviar os dados.') +
+          (jaImportadas > 0 ? ` (${jaImportadas} vendas ja foram importadas antes do erro.)` : '')
+      );
       setEtapa('conferir');
+    } finally {
+      setProgresso(null);
     }
   };
 
@@ -220,8 +263,9 @@ export function ImportarVendasModal({
                   onChange={(e) => e.target.files?.[0] && processarArquivo(e.target.files[0])}
                 />
                 {erroArquivo && (
-                  <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300">
-                    <AlertTriangle size={13} /> {erroArquivo}
+                  <div className="mt-4 flex items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                    <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+                    <span>{erroArquivo}</span>
                   </div>
                 )}
               </div>
@@ -232,7 +276,8 @@ export function ImportarVendasModal({
                 <p className="mb-3 text-xs text-muted">
                   {linhas.length} linha{linhas.length === 1 ? '' : 's'} encontrada{linhas.length === 1 ? '' : 's'}.
                   Confira se cada campo esta mapeado para a coluna certa do seu arquivo. Nenhum campo e obrigatorio
-                  - o que ficar em branco pode ser preenchido manualmente depois.
+                  - o que ficar em branco pode ser preenchido manualmente depois. Arquivos grandes sao enviados
+                  automaticamente em lotes de {TAMANHO_LOTE} vendas.
                 </p>
 
                 <div className="mb-4 space-y-2">
@@ -263,9 +308,9 @@ export function ImportarVendasModal({
                 </div>
 
                 {camposFaltando.length > 0 && (
-                  <div className="mb-4 flex items-center gap-2 rounded-lg bg-amber/10 px-3 py-2 text-xs text-amber">
-                    <AlertTriangle size={13} />
-                    Falta mapear: {camposFaltando.map((c) => c.label).join(', ')}
+                  <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber/10 px-3 py-2 text-xs text-amber">
+                    <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+                    <span>Falta mapear: {camposFaltando.map((c) => c.label).join(', ')}</span>
                   </div>
                 )}
 
@@ -301,8 +346,9 @@ export function ImportarVendasModal({
                 </div>
 
                 {erroArquivo && (
-                  <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300">
-                    <AlertTriangle size={13} /> {erroArquivo}
+                  <div className="mb-4 flex items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                    <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+                    <span>{erroArquivo}</span>
                   </div>
                 )}
 
@@ -327,7 +373,16 @@ export function ImportarVendasModal({
             {etapa === 'enviando' && (
               <div className="flex flex-col items-center justify-center gap-3 py-12">
                 <Loader2 size={24} className="animate-spin text-sapphire" />
-                <p className="text-sm text-muted">Importando {linhas.length} vendas, aguarde...</p>
+                {progresso ? (
+                  <div className="text-center">
+                    <p className="text-sm text-muted">
+                      Lote {progresso.loteAtual} de {progresso.totalLotes} - {Math.min(progresso.enviados + TAMANHO_LOTE, progresso.totalLinhas)} de {progresso.totalLinhas} vendas
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted">Isso pode levar alguns minutos para arquivos grandes, aguarde...</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted">Importando {linhas.length} vendas, aguarde...</p>
+                )}
               </div>
             )}
 
