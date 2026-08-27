@@ -13,7 +13,8 @@ type CampoAlvo =
   | 'oftalmologista_preferido'
   | 'oftalmologista_telefone'
   | 'valor_compra'
-  | 'data_compra';
+  | 'data_compra'
+  | 'sequencia_externa';
 
 const CAMPOS: { id: CampoAlvo; label: string; obrigatorio: boolean; sinonimos: string[] }[] = [
   { id: 'nome', label: 'Nome do cliente', obrigatorio: false, sinonimos: ['nome', 'cliente', 'nome do cliente', 'nome cliente', 'paciente'] },
@@ -23,6 +24,7 @@ const CAMPOS: { id: CampoAlvo; label: string; obrigatorio: boolean; sinonimos: s
   { id: 'valor_compra', label: 'Valor da compra', obrigatorio: false, sinonimos: ['valor', 'valor da compra', 'total', 'valor compra', 'preco', 'preço', 'valor total'] },
   { id: 'email', label: 'E-mail (opcional)', obrigatorio: false, sinonimos: ['email', 'e-mail'] },
   { id: 'data_compra', label: 'Data da compra (opcional)', obrigatorio: false, sinonimos: ['data', 'data da compra', 'data compra', 'dt compra'] },
+  { id: 'sequencia_externa', label: 'Sequência (referência do sistema de origem)', obrigatorio: false, sinonimos: ['sequencia', 'sequência', 'seq', 'seq.', 'numero sequencia', 'num seq', 'nº seq'] },
 ];
 
 const TAMANHO_LOTE = 300;
@@ -113,6 +115,7 @@ interface LinhaFormatada {
   oftalmologista_telefone: string;
   valor_compra: number | undefined;
   data_compra: string | undefined;
+  sequencia_externa: string;
 }
 
 interface ResultadoImportacao {
@@ -191,6 +194,9 @@ export function ImportarVendasModal({
           : '',
         valor_compra: mapeamento.valor_compra ? parseValor(String(linha[mapeamento.valor_compra] ?? '')) : undefined,
         data_compra: mapeamento.data_compra ? parseData(String(linha[mapeamento.data_compra] ?? '')) : undefined,
+        sequencia_externa: mapeamento.sequencia_externa
+          ? String(linha[mapeamento.sequencia_externa] ?? '').trim()
+          : '',
       }))
       .filter(
         (l) =>
@@ -199,7 +205,8 @@ export function ImportarVendasModal({
           l.email ||
           l.oftalmologista_preferido ||
           l.oftalmologista_telefone ||
-          l.valor_compra
+          l.valor_compra ||
+          l.sequencia_externa
       );
 
     if (linhasFormatadas.length === 0) {

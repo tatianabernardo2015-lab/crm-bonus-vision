@@ -23,7 +23,6 @@ export async function POST(request: NextRequest) {
   const clienteIdPorIndice = new Map<number, string>();
   const errosPorIndice = new Map<number, string>();
 
-  // 1) Busca em UMA consulta todos os clientes existentes com telefone informado
   const telefones = Array.from(new Set(linhas.map((l) => l.telefone).filter((t): t is string => !!t)));
   const existentesMap = new Map<string, { id: string; arquivado: boolean }>();
 
@@ -39,8 +38,6 @@ export async function POST(request: NextRequest) {
     (existentes ?? []).forEach((c) => existentesMap.set(c.telefone as string, c));
   }
 
-  // 2) Separa linhas: as que ja tem cliente cadastrado (por telefone) vao para update,
-  //    as demais vao para um unico insert em lote
   const paraAtualizar: { linha: LinhaImportacao; indice: number }[] = [];
   const paraCriar: { linha: LinhaImportacao; indice: number }[] = [];
 
@@ -52,7 +49,6 @@ export async function POST(request: NextRequest) {
     }
   });
 
-  // 3) Atualiza clientes ja existentes (geralmente poucos, um a um)
   for (const { linha, indice } of paraAtualizar) {
     const existente = existentesMap.get(linha.telefone)!;
     const { error } = await supabase
@@ -71,7 +67,6 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 4) Cria todos os clientes novos em UM UNICO insert em lote
   if (paraCriar.length > 0) {
     const { data: novos, error } = await supabase
       .from('clientes')
@@ -93,12 +88,12 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 5) Insere todas as transacoes (vendas com valor) em UM UNICO insert em lote
   const transacoesParaInserir: {
     cliente_id: string;
     valor_compra: number;
     data_compra: string;
     data_validade_bonus: string;
+    sequencia_externa: string | null;
   }[] = [];
   const indicesComTransacao: number[] = [];
 
@@ -112,6 +107,7 @@ export async function POST(request: NextRequest) {
           valor_compra: linha.valor_compra,
           data_compra: linha.data_compra || new Date().toISOString(),
           data_validade_bonus: linha.data_compra || new Date().toISOString(),
+          sequencia_externa: linha.sequencia_externa || null,
         });
         indicesComTransacao.push(indice);
       }
@@ -125,7 +121,6 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 6) Monta o resultado final, linha por linha
   const resultados: ResultadoLinha[] = linhas.map((linha, indice) => {
     const nomeExibicao = linha.nome || '(sem nome)';
     if (errosPorIndice.has(indice)) {
