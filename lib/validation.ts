@@ -47,6 +47,7 @@ const linhaImportacaoSchema = z.object({
   oftalmologista_telefone: z.string().optional().or(z.literal('')),
   valor_compra: z.number().positive().optional(),
   data_compra: z.string().optional(),
+  sequencia_externa: z.string().optional().or(z.literal('')),
 });
 
 export const importarVendasSchema = z.object({
