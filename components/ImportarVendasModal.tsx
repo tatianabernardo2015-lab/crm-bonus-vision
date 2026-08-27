@@ -77,6 +77,32 @@ function parseData(bruto: string): string | undefined {
   return isNaN(data.getTime()) ? undefined : data.toISOString();
 }
 
+async function lerRespostaComoJson(resposta: Response): Promise<{ ok: boolean; dados: any; mensagemAmigavel?: string }> {
+  const contentType = resposta.headers.get('content-type') || '';
+  const texto = await resposta.text();
+
+  if (!contentType.includes('application/json')) {
+    return {
+      ok: false,
+      dados: null,
+      mensagemAmigavel:
+        resposta.status === 504 || resposta.status === 502
+          ? 'O servidor demorou demais para responder (tempo esgotado). Tente novamente com um arquivo menor ou aguarde alguns minutos.'
+          : `O servidor retornou uma resposta inesperada (codigo ${resposta.status}). Tente novamente em alguns instantes; se persistir, o arquivo pode ser grande demais para um unico envio.`,
+    };
+  }
+
+  try {
+    return { ok: true, dados: JSON.parse(texto) };
+  } catch {
+    return {
+      ok: false,
+      dados: null,
+      mensagemAmigavel: 'Nao foi possivel interpretar a resposta do servidor. Tente novamente em alguns instantes.',
+    };
+  }
+}
+
 // ------------------------------- Componente -------------------------------
 
 interface LinhaFormatada {
@@ -206,10 +232,11 @@ export function ImportarVendasModal({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ linhas: pedaco }),
         });
-        const dados = await resposta.json();
 
-        if (!resposta.ok) {
-          throw new Error(dados.erro || `Falha ao importar o lote ${lote + 1} de ${totalLotes}.`);
+        const { ok, dados, mensagemAmigavel } = await lerRespostaComoJson(resposta);
+
+        if (!resposta.ok || !ok) {
+          throw new Error(mensagemAmigavel || dados?.erro || `Falha ao importar o lote ${lote + 1} de ${totalLotes}.`);
         }
 
         acumulado.total += dados.total;
@@ -243,9 +270,12 @@ export function ImportarVendasModal({
       style={{ background: 'rgba(4,6,12,0.7)', backdropFilter: 'blur(4px)' }}
       onClick={etapa === 'enviando' ? undefined : onClose}
     >
-      <div className="w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
-        <GlassPanel className="bg-[#0E1424]">
-          <div className="p-6">
+      <div
+        className="flex w-full max-w-2xl max-h-[90vh] flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GlassPanel className="flex max-h-[90vh] flex-col overflow-hidden bg-[#0E1424]">
+          <div className="flex max-h-[90vh] flex-col overflow-y-auto p-6">
             <div className="mb-5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileSpreadsheet size={16} className="text-sapphire" />
@@ -257,6 +287,13 @@ export function ImportarVendasModal({
                 </button>
               )}
             </div>
+
+            {erroArquivo && (
+              <div className="mb-4 flex items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+                <span>{erroArquivo}</span>
+              </div>
+            )}
 
             {etapa === 'upload' && (
               <div>
@@ -280,12 +317,6 @@ export function ImportarVendasModal({
                   className="hidden"
                   onChange={(e) => e.target.files?.[0] && processarArquivo(e.target.files[0])}
                 />
-                {erroArquivo && (
-                  <div className="mt-4 flex items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300">
-                    <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
-                    <span>{erroArquivo}</span>
-                  </div>
-                )}
               </div>
             )}
 
@@ -372,13 +403,6 @@ export function ImportarVendasModal({
                     </p>
                   )}
                 </div>
-
-                {erroArquivo && (
-                  <div className="mb-4 flex items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300">
-                    <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
-                    <span>{erroArquivo}</span>
-                  </div>
-                )}
 
                 <div className="flex gap-2">
                   <button
