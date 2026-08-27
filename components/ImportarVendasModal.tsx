@@ -32,6 +32,7 @@ function normalizar(texto: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\uFEFF\u200B]/g, '')
     .trim();
 }
 
@@ -59,10 +60,18 @@ function parseValor(bruto: string): number | undefined {
 
 function parseData(bruto: string): string | undefined {
   if (!bruto) return undefined;
-  const ddmmyyyy = bruto.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  const ddmmyyyy = bruto.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
   if (ddmmyyyy) {
     const [, d, m, y] = ddmmyyyy;
-    return new Date(Number(y), Number(m) - 1, Number(d)).toISOString();
+    const resto = bruto.slice(ddmmyyyy[0].length).trim();
+    const dataBase = new Date(Number(y), Number(m) - 1, Number(d));
+    if (resto) {
+      const horaMatch = resto.match(/^(\d{1,2}):(\d{2})(:(\d{2}))?/);
+      if (horaMatch) {
+        dataBase.setHours(Number(horaMatch[1]), Number(horaMatch[2]), Number(horaMatch[4] || 0));
+      }
+    }
+    return dataBase.toISOString();
   }
   const data = new Date(bruto);
   return isNaN(data.getTime()) ? undefined : data.toISOString();
@@ -115,7 +124,7 @@ export function ImportarVendasModal({
         const texto = await arquivo.text();
         const resultado = Papa.parse<Record<string, string>>(texto, { header: true, skipEmptyLines: true });
         dados = resultado.data;
-        cabecalhos = resultado.meta.fields ?? [];
+        cabecalhos = (resultado.meta.fields ?? []).map((h) => h.replace(/^\uFEFF/, ''));
       } else {
         setErroArquivo(
           'Por enquanto so aceito arquivos .csv. Se o seu arquivo e .xlsx ou .xls, abra ele no Excel e use "Arquivo -> Salvar como -> CSV (separado por virgulas)", depois envie o CSV gerado.'
@@ -138,10 +147,10 @@ export function ImportarVendasModal({
   };
 
   const camposFaltando = CAMPOS.filter((c) => c.obrigatorio && !mapeamento[c.id]);
+  const nenhumCampoMapeado = CAMPOS.every((c) => !mapeamento[c.id]);
 
   const confirmarImportacao = async () => {
     setErroArquivo('');
-    setEtapa('enviando');
 
     const linhasFormatadas: LinhaFormatada[] = linhas
       .map((linha) => ({
@@ -166,6 +175,15 @@ export function ImportarVendasModal({
           l.oftalmologista_telefone ||
           l.valor_compra
       );
+
+    if (linhasFormatadas.length === 0) {
+      setErroArquivo(
+        'Nenhuma linha valida foi encontrada com o mapeamento atual. Confira se pelo menos um campo (Nome, Telefone, Valor, etc.) esta mapeado para a coluna certa do seu arquivo, e se essa coluna realmente tem dados preenchidos nas linhas.'
+      );
+      return;
+    }
+
+    setEtapa('enviando');
 
     const totalLotes = Math.max(1, Math.ceil(linhasFormatadas.length / TAMANHO_LOTE));
     const acumulado: ResultadoImportacao = { total: 0, sucesso: 0, erros: [] };
@@ -279,6 +297,16 @@ export function ImportarVendasModal({
                   - o que ficar em branco pode ser preenchido manualmente depois. Arquivos grandes sao enviados
                   automaticamente em lotes de {TAMANHO_LOTE} vendas.
                 </p>
+
+                {nenhumCampoMapeado && (
+                  <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber/10 px-3 py-2 text-xs text-amber">
+                    <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+                    <span>
+                      Nenhuma coluna foi reconhecida automaticamente. Selecione manualmente pelo menos uma coluna
+                      abaixo (por exemplo, Nome ou Valor da compra) antes de importar.
+                    </span>
+                  </div>
+                )}
 
                 <div className="mb-4 space-y-2">
                   {CAMPOS.map((campo) => (
