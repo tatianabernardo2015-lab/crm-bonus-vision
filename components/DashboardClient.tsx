@@ -142,17 +142,21 @@ export function DashboardClient({
     }));
   };
 
-  const handleAtualizarStatusBonus = async (transacaoId: string, status: StatusBonus) => {
+  const handleAtualizarStatusBonus = async (transacaoId: string, status: StatusBonus, valorNovaCompra?: number) => {
     anunciarSync();
     const resposta = await fetch(`/api/transacoes/${transacaoId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status_bonus: status }),
+      body: JSON.stringify({
+        status_bonus: status,
+        ...(valorNovaCompra ? { valor_nova_compra: valorNovaCompra } : {}),
+      }),
     });
 
     if (!resposta.ok) {
+      const erro = await resposta.json().catch(() => null);
       console.error('Falha ao atualizar status do bonus');
-      return;
+      throw new Error(erro?.erro || 'Falha ao atualizar status do bonus');
     }
 
     setTransacoes((prev) => prev.map((t) => (t.id === transacaoId ? { ...t, status_bonus: status } : t)));
@@ -194,6 +198,33 @@ export function DashboardClient({
       bonus_resgatado:
         transacao.status_bonus === 'utilizado'
           ? Math.max(0, prev.bonus_resgatado - transacao.valor_bonus)
+          : prev.bonus_resgatado,
+    }));
+  };
+
+  const handleRestaurarVenda = async (transacao: Transacao) => {
+    anunciarSync();
+    const resposta = await fetch(`/api/transacoes/${transacao.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cancelada: false }),
+    });
+
+    if (!resposta.ok) {
+      console.error('Falha ao restaurar venda');
+      throw new Error('Falha ao restaurar venda');
+    }
+
+    setMetricas((prev) => ({
+      ...prev,
+      bonus_gerado: prev.bonus_gerado + transacao.valor_bonus,
+      bonus_disponivel:
+        transacao.status_bonus === 'disponivel'
+          ? prev.bonus_disponivel + transacao.valor_bonus
+          : prev.bonus_disponivel,
+      bonus_resgatado:
+        transacao.status_bonus === 'utilizado'
+          ? prev.bonus_resgatado + transacao.valor_bonus
           : prev.bonus_resgatado,
     }));
   };
@@ -396,6 +427,7 @@ export function DashboardClient({
               }}
               onAtualizarStatus={handleAtualizarStatusBonus}
               onCancelar={handleCancelarVenda}
+              onRestaurar={handleRestaurarVenda}
             />
           )}
 

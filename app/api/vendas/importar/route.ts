@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   });
 
   for (const { linha, indice } of paraAtualizar) {
-    const existente = existentesMap.get(linha.telefone)!;
+    const existente = existentesMap.get(linha.telefone as string)!;
     const { error } = await supabase
       .from('clientes')
       .update({
