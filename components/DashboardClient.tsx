@@ -295,6 +295,7 @@ export function DashboardClient({
     setClientes((prev) => prev.filter((c) => c.id !== cliente.id));
     setTransacoes((prev) => prev.filter((t) => t.cliente_id !== cliente.id));
     setAgendamentos((prev) => prev.filter((a) => a.cliente_id !== cliente.id));
+    setSinalAtualizacaoClientes((n) => n + 1);
   };
 
   const handleExcluirTodosClientes = async () => {
@@ -316,6 +317,7 @@ export function DashboardClient({
       bonus_resgatado: 0,
       clientes_ativos: 0,
     }));
+    setSinalAtualizacaoClientes((n) => n + 1);
   };
 
   const handleSalvarConfiguracoes = async (dados: {
@@ -465,6 +467,7 @@ export function DashboardClient({
               onAtualizarStatus={handleAtualizarStatusBonus}
               onCancelar={handleCancelarVenda}
               onRestaurar={handleRestaurarVenda}
+              sinalAtualizacao={sinalAtualizacaoClientes}
             />
           )}
 
