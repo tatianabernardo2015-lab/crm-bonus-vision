@@ -71,7 +71,8 @@ export function DashboardClient({
     return () => clearTimeout(timeout);
   }, []);
 
-  // Escuta mudanças em tempo real nas 3 tabelas via Supabase Realtime
+  // Escuta mudancas em tempo real nas 4 tabelas via Supabase Realtime
+  // (clientes, transacoes, agendamentos_preventivos e configuracoes_loja)
   useEffect(() => {
     const canal = supabase
       .channel('crm-bonus-vision-realtime')
@@ -92,6 +93,16 @@ export function DashboardClient({
         { event: '*', schema: 'public', table: 'agendamentos_preventivos' },
         () => {
           anunciarSync();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'configuracoes_loja' },
+        (payload) => {
+          anunciarSync();
+          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+            setConfiguracao(payload.new as ConfiguracaoLoja);
+          }
         }
       )
       .subscribe();
@@ -140,7 +151,7 @@ export function DashboardClient({
     });
 
     if (!resposta.ok) {
-      console.error('Falha ao atualizar status do bônus');
+      console.error('Falha ao atualizar status do bonus');
       return;
     }
 
@@ -255,7 +266,7 @@ export function DashboardClient({
     });
 
     if (!resposta.ok) {
-      console.error('Falha ao salvar configurações');
+      console.error('Falha ao salvar configuracoes');
       return;
     }
 
@@ -301,7 +312,7 @@ export function DashboardClient({
             <h1 className="text-lg font-semibold tracking-tight text-ivory">
               {NAV_ITEMS.find((n) => n.id === activeNav)?.label}
             </h1>
-            <p className="text-xs text-muted">Painel de controle · sincronizado com Supabase</p>
+            <p className="text-xs text-muted">Painel de controle - sincronizado com Supabase</p>
           </div>
           <div className="flex items-center gap-3">
             <SyncIndicator state={syncState} />
@@ -320,7 +331,7 @@ export function DashboardClient({
             <>
               <div className="mb-6 grid grid-cols-3 gap-4">
                 <MetricCard
-                  label="Bônus gerados"
+                  label="Bonus gerados"
                   value={formatarMoeda(metricas.bonus_gerado)}
                   sub={`${totalClientes} clientes ativos`}
                   icon={Wallet}
@@ -328,7 +339,7 @@ export function DashboardClient({
                   accentHex="#2563EB"
                 />
                 <MetricCard
-                  label="Bônus resgatados"
+                  label="Bonus resgatados"
                   value={formatarMoeda(metricas.bonus_resgatado)}
                   sub="Total utilizado em lojas"
                   icon={CheckCircle2}
@@ -337,7 +348,7 @@ export function DashboardClient({
                 />
                 <MetricCard
                   label="Taxa de retorno (1 ano)"
-                  value={metricas.taxa_retorno_percentual ? `${metricas.taxa_retorno_percentual}%` : '—'}
+                  value={metricas.taxa_retorno_percentual ? `${metricas.taxa_retorno_percentual}%` : '-'}
                   sub="Clientes que reagendaram exame"
                   icon={TrendingUp}
                   accentClass="bg-amber/15 text-amber"

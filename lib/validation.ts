@@ -22,6 +22,7 @@ export const clienteArquivarSchema = z.object({
 
 export const transacaoStatusSchema = z.object({
   status_bonus: z.enum(['disponivel', 'utilizado', 'expirado']),
+  valor_nova_compra: z.number().positive().optional(),
 });
 
 export const transacaoCancelarSchema = z.object({

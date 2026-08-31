@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
   const q = searchParams.get('q')?.trim() ?? '';
   const status = searchParams.get('status') ?? '';
   const clienteId = searchParams.get('clienteId') ?? '';
+  const canceladas = searchParams.get('canceladas') === 'true';
   const offset = Number(searchParams.get('offset') ?? 0);
   const limite = clienteId ? 200 : TAMANHO_PAGINA;
 
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from('transacoes')
     .select('*, cliente:clientes!inner(id, nome, telefone, oftalmologista_preferido)', { count: 'exact' })
-    .eq('cancelada', false)
+    .eq('cancelada', canceladas)
     .order('data_compra', { ascending: false })
     .range(offset, offset + limite - 1);
 
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
     query = query.eq('cliente_id', clienteId);
   }
 
-  if (status) {
+  if (status && !canceladas) {
     query = query.eq('status_bonus', status);
   }
 

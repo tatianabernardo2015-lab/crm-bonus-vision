@@ -20,6 +20,7 @@ export interface Transacao {
   cancelada: boolean;
   data_compra: string;
   data_validade_bonus: string;
+  sequencia_externa?: string | null;
 }
 
 export type StatusAgendamento = 'pendente' | 'notificado' | 'agendado' | 'cancelado';
