@@ -9,10 +9,11 @@ export async function POST(request: NextRequest) {
   const parsed = vendaSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ erro: 'Dados inválidos', detalhes: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ erro: 'Dados invalidos', detalhes: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { nome, telefone, email, oftalmologista_preferido, valor_compra, cliente_id } = parsed.data;
+  const { nome, telefone, email, oftalmologista_preferido, valor_compra, cliente_id, sequencia_externa } = parsed.data;
+
   const supabase = await createClient();
 
   let clienteIdFinal = cliente_id;
@@ -50,8 +51,8 @@ export async function POST(request: NextRequest) {
       cliente_id: clienteIdFinal,
       valor_compra,
       data_compra: new Date().toISOString(),
-      // data_validade_bonus é preenchida pelo trigger fn_criar_agendamento_preventivo
       data_validade_bonus: new Date().toISOString(),
+      sequencia_externa: sequencia_externa || null,
     })
     .select('*')
     .single();

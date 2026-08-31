@@ -7,6 +7,7 @@ export const vendaSchema = z.object({
   oftalmologista_preferido: z.string().min(2),
   valor_compra: z.number().positive(),
   cliente_id: z.string().uuid().optional(),
+  sequencia_externa: z.string().optional().or(z.literal('')),
 });
 
 export const clienteEditarSchema = z.object({

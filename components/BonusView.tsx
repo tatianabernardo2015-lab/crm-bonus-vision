@@ -39,7 +39,11 @@ export function BonusView({
   totalInicial: number;
   temMaisInicial: boolean;
   totais: { gerado: number; disponivel: number; resgatado: number };
-  onAtualizarStatus: (transacaoId: string, status: StatusBonus, valorNovaCompra?: number) => Promise<void> | void;
+  onAtualizarStatus: (
+    transacaoId: string,
+    status: StatusBonus,
+    valorNovaCompra?: number
+  ) => Promise<number | void> | number | void;
   onCancelar: (transacao: LinhaBonus) => Promise<void> | void;
   onRestaurar: (transacao: LinhaBonus) => Promise<void> | void;
 }) {
@@ -106,9 +110,9 @@ export function BonusView({
   };
 
   const resgatar = async (t: LinhaBonus) => {
-    const minimo = t.valor_bonus * 4;
+    const saldoDisponivel = t.valor_bonus - (t.valor_bonus_resgatado ?? 0);
     const entrada = window.prompt(
-      `Para resgatar este bonus de ${formatarMoeda(t.valor_bonus)}, informe o valor da nova compra do cliente (minimo ${formatarMoeda(minimo)}, ou seja, 4x o valor do bonus):`
+      `Bonus disponivel: ${formatarMoeda(saldoDisponivel)}.\n\nInforme o valor da nova compra do cliente para calcular o desconto (o desconto liberado e o menor valor entre o bonus disponivel e 25% dessa compra):`
     );
     if (entrada === null) return;
     const valor = parseFloat(entrada.replace(/\./g, '').replace(',', '.'));
@@ -116,16 +120,33 @@ export function BonusView({
       alert('Valor invalido.');
       return;
     }
-    if (valor < minimo) {
-      alert(
-        `O valor informado (${formatarMoeda(valor)}) e menor que o minimo necessario de ${formatarMoeda(minimo)} (4x o valor do bonus). O resgate nao pode ser liberado.`
-      );
+    const descontoCalculado = Math.min(saldoDisponivel, valor * 0.25);
+    if (descontoCalculado <= 0) {
+      alert('Esse valor de compra nao libera nenhum desconto.');
       return;
     }
+    if (
+      !confirm(
+        `Sera liberado ${formatarMoeda(descontoCalculado)} de desconto sobre essa compra de ${formatarMoeda(valor)}.\n\nConfirmar resgate?`
+      )
+    )
+      return;
+
     setProcessando(t.id);
     try {
-      await onAtualizarStatus(t.id, 'utilizado', valor);
-      setTransacoes((prev) => prev.map((tt) => (tt.id === t.id ? { ...tt, status_bonus: 'utilizado' as StatusBonus } : tt)));
+      const resultado = await onAtualizarStatus(t.id, 'utilizado', valor);
+      const descontoReal = typeof resultado === 'number' ? resultado : descontoCalculado;
+      setTransacoes((prev) =>
+        prev.map((tt) => {
+          if (tt.id !== t.id) return tt;
+          const novoResgatado = (tt.valor_bonus_resgatado ?? 0) + descontoReal;
+          return {
+            ...tt,
+            valor_bonus_resgatado: novoResgatado,
+            status_bonus: novoResgatado >= tt.valor_bonus ? ('utilizado' as StatusBonus) : tt.status_bonus,
+          };
+        })
+      );
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Falha ao resgatar o bonus.');
     } finally {
@@ -229,6 +250,8 @@ export function BonusView({
         <div className="space-y-2">
           {transacoes.map((t) => {
             const rotulo = ROTULOS[t.status_bonus];
+            const saldoDisponivel = t.valor_bonus - (t.valor_bonus_resgatado ?? 0);
+            const temResgateParcial = (t.valor_bonus_resgatado ?? 0) > 0 && t.status_bonus === 'disponivel';
             return (
               <div key={t.id} className="flex items-center justify-between rounded-xl border border-line px-4 py-3">
                 <div className="min-w-0">
@@ -236,6 +259,7 @@ export function BonusView({
                   <p className="text-[11px] text-muted">
                     Compra em {formatarData(t.data_compra)} - valido ate {formatarData(t.data_validade_bonus)}
                     {t.sequencia_externa ? ` - Seq. ${t.sequencia_externa}` : ''}
+                    {temResgateParcial ? ` - ja resgatado ${formatarMoeda(t.valor_bonus_resgatado)} de ${formatarMoeda(t.valor_bonus)}` : ''}
                   </p>
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-2 pl-3">
@@ -244,7 +268,9 @@ export function BonusView({
                       {rotulo.texto}
                     </span>
                   )}
-                  <p className="w-24 text-right text-sm font-medium text-ivory">{formatarMoeda(t.valor_bonus)}</p>
+                  <p className="w-24 text-right text-sm font-medium text-ivory">
+                    {formatarMoeda(t.status_bonus === 'disponivel' ? saldoDisponivel : t.valor_bonus)}
+                  </p>
                   {abaCancelada ? (
                     <button
                       onClick={() => restaurar(t)}

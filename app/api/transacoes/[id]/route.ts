@@ -41,10 +41,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ erro: 'Dados invalidos', detalhes: parsed.error.flatten() }, { status: 400 });
   }
 
+  // Regra de resgate Giftback: o desconto liberado por resgate e o MENOR valor entre
+  // o saldo de bonus ainda disponivel e 25% do valor da nova compra. Isso cobre os
+  // dois criterios ao mesmo tempo: se a compra for >= 4x o bonus, 25% dela ja cobre
+  // o bonus inteiro (resgate total); se for menor, libera so a fracao proporcional,
+  // e o restante do bonus continua disponivel para uso futuro.
   if (parsed.data.status_bonus === 'utilizado') {
     const { data: transacaoAtual, error: erroBusca } = await supabase
       .from('transacoes')
-      .select('valor_bonus, status_bonus')
+      .select('valor_bonus, valor_bonus_resgatado, status_bonus')
       .eq('id', id)
       .single();
 
@@ -53,20 +58,44 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     if (transacaoAtual.status_bonus === 'utilizado') {
-      return NextResponse.json({ erro: 'Este bonus ja foi resgatado.' }, { status: 400 });
+      return NextResponse.json({ erro: 'Este bonus ja foi totalmente resgatado.' }, { status: 400 });
     }
 
-    const valorMinimoNecessario = transacaoAtual.valor_bonus * 4;
-    const valorInformado = parsed.data.valor_nova_compra ?? 0;
+    const saldoDisponivel = transacaoAtual.valor_bonus - (transacaoAtual.valor_bonus_resgatado ?? 0);
+    const valorNovaCompra = parsed.data.valor_nova_compra ?? 0;
 
-    if (valorInformado < valorMinimoNecessario) {
+    if (valorNovaCompra <= 0) {
       return NextResponse.json(
-        {
-          erro: `Para resgatar este bonus, a nova compra precisa ser de pelo menos 4x o valor do bonus (minimo de R$ ${valorMinimoNecessario.toFixed(2)}). Valor informado: R$ ${valorInformado.toFixed(2)}.`,
-        },
+        { erro: 'Informe o valor da nova compra do cliente para calcular o desconto liberado.' },
         { status: 400 }
       );
     }
+
+    const descontoLiberado = Math.min(saldoDisponivel, valorNovaCompra * 0.25);
+
+    if (descontoLiberado <= 0) {
+      return NextResponse.json(
+        { erro: 'O valor de compra informado nao gera nenhum desconto (25% da compra e zero ou o bonus ja esta zerado).' },
+        { status: 400 }
+      );
+    }
+
+    const novoValorResgatado = (transacaoAtual.valor_bonus_resgatado ?? 0) + descontoLiberado;
+    const novoStatus: 'disponivel' | 'utilizado' =
+      novoValorResgatado >= transacaoAtual.valor_bonus ? 'utilizado' : 'disponivel';
+
+    const { data, error } = await supabase
+      .from('transacoes')
+      .update({ valor_bonus_resgatado: novoValorResgatado, status_bonus: novoStatus })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) {
+      return NextResponse.json({ erro: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ transacao: data, valor_descontado: descontoLiberado });
   }
 
   const { data, error } = await supabase

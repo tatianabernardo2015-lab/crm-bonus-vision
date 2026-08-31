@@ -16,6 +16,7 @@ export interface Transacao {
   valor_compra: number;
   percentual_bonus: number;
   valor_bonus: number;
+  valor_bonus_resgatado: number;
   status_bonus: StatusBonus;
   cancelada: boolean;
   data_compra: string;
@@ -49,6 +50,7 @@ export interface NovaVendaInput {
   email?: string;
   oftalmologista_preferido: string;
   valor_compra: number;
+  sequencia_externa?: string;
 }
 
 export interface ConfiguracaoLoja {

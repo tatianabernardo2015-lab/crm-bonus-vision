@@ -39,6 +39,7 @@ export function CadastroModal({
   const [telefone, setTelefone] = useState('');
   const [valorCompra, setValorCompra] = useState('');
   const [oftalmologista, setOftalmologista] = useState('');
+  const [sequenciaExterna, setSequenciaExterna] = useState('');
   const [enviando, setEnviando] = useState(false);
 
   if (!open) return null;
@@ -51,6 +52,7 @@ export function CadastroModal({
     setTelefone('');
     setValorCompra('');
     setOftalmologista('');
+    setSequenciaExterna('');
   };
 
   const submit = async () => {
@@ -62,6 +64,7 @@ export function CadastroModal({
         telefone,
         oftalmologista_preferido: oftalmologista,
         valor_compra: valorNumerico,
+        ...(sequenciaExterna ? { sequencia_externa: sequenciaExterna } : {}),
       });
       limpar();
       onClose();
@@ -87,7 +90,6 @@ export function CadastroModal({
                 <X size={18} className="text-ivory" />
               </button>
             </div>
-
             <div className="space-y-4">
               <Field label="Nome do cliente" required>
                 <input
@@ -114,7 +116,7 @@ export function CadastroModal({
                   className="w-full bg-transparent text-sm text-ivory outline-none"
                 />
               </Field>
-              <Field label="Oftalmologista de preferência" required>
+              <Field label="Oftalmologista de preferencia" required>
                 <input
                   value={oftalmologista}
                   onChange={(e) => setOftalmologista(e.target.value)}
@@ -122,21 +124,27 @@ export function CadastroModal({
                   className="w-full bg-transparent text-sm text-ivory outline-none"
                 />
               </Field>
-
+              <Field label="Sequencia (opcional)">
+                <input
+                  value={sequenciaExterna}
+                  onChange={(e) => setSequenciaExterna(e.target.value)}
+                  placeholder="Ex: 51517"
+                  className="w-full bg-transparent text-sm text-ivory outline-none"
+                />
+              </Field>
               {bonusPreview > 0 && (
                 <div className="flex items-center justify-between rounded-lg bg-sapphire-soft px-3 py-2.5 text-xs text-[#93B4FA]">
-                  <span>Bônus gerado (20%) · válido por 60 dias</span>
+                  <span>Bonus gerado (20%) - valido por 60 dias</span>
                   <span className="font-semibold">{formatarMoeda(bonusPreview)}</span>
                 </div>
               )}
             </div>
-
             <button
               onClick={submit}
               disabled={enviando}
               className="mt-6 w-full rounded-lg bg-sapphire py-2.5 text-sm font-medium text-white transition-all hover:brightness-110 disabled:opacity-60"
             >
-              {enviando ? 'Salvando…' : 'Confirmar venda e gerar bônus'}
+              {enviando ? 'Salvando...' : 'Confirmar venda e gerar bonus'}
             </button>
           </div>
         </GlassPanel>
