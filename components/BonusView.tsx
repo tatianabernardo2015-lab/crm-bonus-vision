@@ -46,6 +46,7 @@ export function BonusView({
   ) => Promise<number | void> | number | void;
   onCancelar: (transacao: LinhaBonus) => Promise<void> | void;
   onRestaurar: (transacao: LinhaBonus) => Promise<void> | void;
+  sinalAtualizacao?: number;
 }) {
   const [aba, setAba] = useState<Aba>('todos');
   const [busca, setBusca] = useState('');
@@ -89,6 +90,16 @@ export function BonusView({
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [busca, aba]);
+
+  const primeiroSinal = useRef(true);
+  useEffect(() => {
+    if (primeiroSinal.current) {
+      primeiroSinal.current = false;
+      return;
+    }
+    buscar(busca, aba);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sinalAtualizacao]);
 
   const carregarMais = async () => {
     setCarregandoMais(true);
