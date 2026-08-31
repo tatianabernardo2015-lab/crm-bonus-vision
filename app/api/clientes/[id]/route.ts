@@ -24,12 +24,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const parsed = clienteEditarSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ erro: 'Dados inválidos', detalhes: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ erro: 'Dados invalidos', detalhes: parsed.error.flatten() }, { status: 400 });
   }
 
   const supabase = await createClient();
   const { email, ...resto } = parsed.data;
-
   const { data, error } = await supabase
     .from('clientes')
     .update({ ...resto, email: email || null })
@@ -40,6 +39,24 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (error) {
     return NextResponse.json({ erro: error.message }, { status: 500 });
   }
-
   return NextResponse.json({ cliente: data });
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  // Nao ha delecao em cascata configurada no banco, entao apagamos primeiro
+  // os registros que dependem do cliente (agendamentos e vendas), e so
+  // depois o cliente em si.
+  await supabase.from('agendamentos_preventivos').delete().eq('cliente_id', id);
+  await supabase.from('transacoes').delete().eq('cliente_id', id);
+
+  const { error } = await supabase.from('clientes').delete().eq('id', id);
+
+  if (error) {
+    return NextResponse.json({ erro: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ sucesso: true });
 }

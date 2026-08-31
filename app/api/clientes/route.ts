@@ -38,3 +38,22 @@ export async function GET(request: NextRequest) {
     temMais: offset + TAMANHO_PAGINA < total,
   });
 }
+
+export async function DELETE() {
+  const supabase = await createClient();
+
+  // O Supabase exige uma condicao no delete por seguranca; usamos um filtro
+  // sempre verdadeiro (id diferente de um uuid que nunca existe) para apagar
+  // tudo. O RLS garante que cada usuario so apaga os proprios registros.
+  const idNuncaExistente = '00000000-0000-0000-0000-000000000000';
+
+  await supabase.from('agendamentos_preventivos').delete().neq('id', idNuncaExistente);
+  await supabase.from('transacoes').delete().neq('id', idNuncaExistente);
+  const { error } = await supabase.from('clientes').delete().neq('id', idNuncaExistente);
+
+  if (error) {
+    return NextResponse.json({ erro: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ sucesso: true });
+}

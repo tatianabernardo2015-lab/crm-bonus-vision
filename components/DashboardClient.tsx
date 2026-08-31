@@ -71,6 +71,8 @@ export function DashboardClient({
     return () => clearTimeout(timeout);
   }, []);
 
+  // Escuta mudancas em tempo real nas 4 tabelas via Supabase Realtime
+  // (clientes, transacoes, agendamentos_preventivos e configuracoes_loja)
   useEffect(() => {
     const canal = supabase
       .channel('crm-bonus-vision-realtime')
@@ -140,11 +142,7 @@ export function DashboardClient({
     }));
   };
 
-  const handleAtualizarStatusBonus = async (
-    transacaoId: string,
-    status: StatusBonus,
-    valorNovaCompra?: number
-  ): Promise<number | void> => {
+  const handleAtualizarStatusBonus = async (transacaoId: string, status: StatusBonus, valorNovaCompra?: number) => {
     anunciarSync();
     const resposta = await fetch(`/api/transacoes/${transacaoId}`, {
       method: 'PATCH',
@@ -161,18 +159,17 @@ export function DashboardClient({
       throw new Error(erro?.erro || 'Falha ao atualizar status do bonus');
     }
 
-    const dados = await resposta.json();
-    const transacaoAtualizada = dados.transacao as Transacao;
+    setTransacoes((prev) => prev.map((t) => (t.id === transacaoId ? { ...t, status_bonus: status } : t)));
 
-    setTransacoes((prev) => prev.map((t) => (t.id === transacaoId ? transacaoAtualizada : t)));
-
-    if (status === 'utilizado' && typeof dados.valor_descontado === 'number') {
-      setMetricas((prev) => ({
-        ...prev,
-        bonus_resgatado: prev.bonus_resgatado + dados.valor_descontado,
-        bonus_disponivel: Math.max(0, prev.bonus_disponivel - dados.valor_descontado),
-      }));
-      return dados.valor_descontado as number;
+    if (status === 'utilizado') {
+      const transacao = transacoes.find((t) => t.id === transacaoId);
+      if (transacao) {
+        setMetricas((prev) => ({
+          ...prev,
+          bonus_resgatado: prev.bonus_resgatado + transacao.valor_bonus,
+          bonus_disponivel: Math.max(0, prev.bonus_disponivel - transacao.valor_bonus),
+        }));
+      }
     }
   };
 
@@ -191,17 +188,16 @@ export function DashboardClient({
 
     setTransacoes((prev) => prev.filter((t) => t.id !== transacao.id));
     setAgendamentos((prev) => prev.filter((a) => a.transacao_id !== transacao.id));
-    const saldoDisponivel = transacao.valor_bonus - (transacao.valor_bonus_resgatado ?? 0);
     setMetricas((prev) => ({
       ...prev,
       bonus_gerado: Math.max(0, prev.bonus_gerado - transacao.valor_bonus),
       bonus_disponivel:
         transacao.status_bonus === 'disponivel'
-          ? Math.max(0, prev.bonus_disponivel - saldoDisponivel)
+          ? Math.max(0, prev.bonus_disponivel - transacao.valor_bonus)
           : prev.bonus_disponivel,
       bonus_resgatado:
-        (transacao.valor_bonus_resgatado ?? 0) > 0
-          ? Math.max(0, prev.bonus_resgatado - transacao.valor_bonus_resgatado)
+        transacao.status_bonus === 'utilizado'
+          ? Math.max(0, prev.bonus_resgatado - transacao.valor_bonus)
           : prev.bonus_resgatado,
     }));
   };
@@ -219,17 +215,16 @@ export function DashboardClient({
       throw new Error('Falha ao restaurar venda');
     }
 
-    const saldoDisponivel = transacao.valor_bonus - (transacao.valor_bonus_resgatado ?? 0);
     setMetricas((prev) => ({
       ...prev,
       bonus_gerado: prev.bonus_gerado + transacao.valor_bonus,
       bonus_disponivel:
         transacao.status_bonus === 'disponivel'
-          ? prev.bonus_disponivel + saldoDisponivel
+          ? prev.bonus_disponivel + transacao.valor_bonus
           : prev.bonus_disponivel,
       bonus_resgatado:
-        (transacao.valor_bonus_resgatado ?? 0) > 0
-          ? prev.bonus_resgatado + transacao.valor_bonus_resgatado
+        transacao.status_bonus === 'utilizado'
+          ? prev.bonus_resgatado + transacao.valor_bonus
           : prev.bonus_resgatado,
     }));
   };
@@ -286,6 +281,41 @@ export function DashboardClient({
     setClientes((prev) =>
       arquivado ? prev.filter((c) => c.id !== cliente.id) : prev.map((c) => (c.id === cliente.id ? { ...c, arquivado } : c))
     );
+  };
+
+  const handleExcluirCliente = async (cliente: Cliente) => {
+    anunciarSync();
+    const resposta = await fetch(`/api/clientes/${cliente.id}`, { method: 'DELETE' });
+
+    if (!resposta.ok) {
+      console.error('Falha ao excluir cliente');
+      throw new Error('Falha ao excluir cliente');
+    }
+
+    setClientes((prev) => prev.filter((c) => c.id !== cliente.id));
+    setTransacoes((prev) => prev.filter((t) => t.cliente_id !== cliente.id));
+    setAgendamentos((prev) => prev.filter((a) => a.cliente_id !== cliente.id));
+  };
+
+  const handleExcluirTodosClientes = async () => {
+    anunciarSync();
+    const resposta = await fetch('/api/clientes', { method: 'DELETE' });
+
+    if (!resposta.ok) {
+      console.error('Falha ao excluir todos os clientes');
+      throw new Error('Falha ao excluir todos os clientes');
+    }
+
+    setClientes([]);
+    setTransacoes([]);
+    setAgendamentos([]);
+    setMetricas((prev) => ({
+      ...prev,
+      bonus_gerado: 0,
+      bonus_disponivel: 0,
+      bonus_resgatado: 0,
+      clientes_ativos: 0,
+    }));
   };
 
   const handleSalvarConfiguracoes = async (dados: {
@@ -406,6 +436,8 @@ export function DashboardClient({
               temMaisInicial={totalClientes > clientesIniciais.length}
               onEditar={(cliente) => setClienteEditando(cliente)}
               onArquivar={handleArquivarCliente}
+              onExcluir={handleExcluirCliente}
+              onExcluirTodos={handleExcluirTodosClientes}
               onAbrirImportacao={() => setImportarOpen(true)}
               sinalAtualizacao={sinalAtualizacaoClientes}
             />

@@ -1,7 +1,21 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Phone, Stethoscope, ChevronDown, Mail, Pencil, Archive, ArchiveRestore, Loader2, Download, Upload } from 'lucide-react';
+import {
+  Search,
+  Phone,
+  Stethoscope,
+  ChevronDown,
+  Mail,
+  Pencil,
+  Archive,
+  ArchiveRestore,
+  Loader2,
+  Download,
+  Upload,
+  Trash2,
+  AlertTriangle,
+} from 'lucide-react';
 import { GlassPanel } from './GlassPanel';
 import { formatarData, formatarMoeda, cn } from '@/lib/utils';
 import type { Cliente, Transacao } from '@/types';
@@ -10,24 +24,23 @@ function LinhaCliente({
   cliente,
   onEditar,
   onArquivar,
+  onExcluir,
 }: {
   cliente: Cliente;
   onEditar: (cliente: Cliente) => void;
   onArquivar: (cliente: Cliente) => void;
+  onExcluir: (cliente: Cliente) => void;
 }) {
   const [aberto, setAberto] = useState(false);
   const [historico, setHistorico] = useState<Transacao[] | null>(null);
   const [carregando, setCarregando] = useState(false);
-
   const totalGasto = useMemo(
     () => (historico ?? []).reduce((acc, t) => acc + t.valor_compra, 0),
     [historico]
   );
-
   const alternarExpansao = async () => {
     const proximoAberto = !aberto;
     setAberto(proximoAberto);
-
     if (proximoAberto && historico === null) {
       setCarregando(true);
       try {
@@ -41,7 +54,6 @@ function LinhaCliente({
       }
     }
   };
-
   return (
     <div className={cn('rounded-xl border border-line', cliente.arquivado && 'opacity-60')}>
       <button
@@ -100,15 +112,24 @@ function LinhaCliente({
           >
             {cliente.arquivado ? <ArchiveRestore size={13} /> : <Archive size={13} />}
           </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onExcluir(cliente);
+            }}
+            className="rounded-lg p-1.5 text-muted transition-colors hover:bg-red-500/10 hover:text-red-300"
+            title="Excluir cliente definitivamente"
+          >
+            <Trash2 size={13} />
+          </button>
           <ChevronDown size={15} className={cn('text-muted transition-transform', aberto && 'rotate-180')} />
         </div>
       </button>
-
       {aberto && (
         <div className="space-y-1.5 border-t border-line px-4 py-3">
           {carregando && (
             <div className="flex items-center gap-2 py-2 text-xs text-muted">
-              <Loader2 size={12} className="animate-spin" /> Carregando histórico…
+              <Loader2 size={12} className="animate-spin" /> Carregando historico...
             </div>
           )}
           {!carregando && historico?.length === 0 && (
@@ -119,7 +140,7 @@ function LinhaCliente({
               <div key={t.id} className="flex items-center justify-between rounded-lg bg-white/[0.02] px-3 py-2">
                 <span className="text-xs text-muted">{formatarData(t.data_compra)}</span>
                 <span className="text-xs text-ivory">{formatarMoeda(t.valor_compra)}</span>
-                <span className="text-xs text-sapphire">+{formatarMoeda(t.valor_bonus)} bônus</span>
+                <span className="text-xs text-sapphire">+{formatarMoeda(t.valor_bonus)} bonus</span>
                 <span
                   className={cn(
                     'rounded-full px-2 py-0.5 text-[10px] font-medium',
@@ -144,6 +165,8 @@ export function ClientesView({
   temMaisInicial,
   onEditar,
   onArquivar,
+  onExcluir,
+  onExcluirTodos,
   onAbrirImportacao,
   sinalAtualizacao,
 }: {
@@ -152,6 +175,8 @@ export function ClientesView({
   temMaisInicial: boolean;
   onEditar: (cliente: Cliente) => void;
   onArquivar: (cliente: Cliente, arquivado: boolean) => Promise<void> | void;
+  onExcluir: (cliente: Cliente) => Promise<void> | void;
+  onExcluirTodos: () => Promise<void> | void;
   onAbrirImportacao: () => void;
   sinalAtualizacao?: number;
 }) {
@@ -162,6 +187,7 @@ export function ClientesView({
   const [temMais, setTemMais] = useState(temMaisInicial);
   const [carregandoMais, setCarregandoMais] = useState(false);
   const [buscando, setBuscando] = useState(false);
+  const [excluindoTodos, setExcluindoTodos] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const primeiraRenderizacao = useRef(true);
 
@@ -227,13 +253,43 @@ export function ClientesView({
     );
   };
 
+  const handleExcluir = async (cliente: Cliente) => {
+    if (
+      !confirm(
+        `Excluir definitivamente ${cliente.nome}?\n\nEssa acao NAO pode ser desfeita. Todas as vendas e agendamentos desse cliente tambem serao apagados.`
+      )
+    )
+      return;
+    await onExcluir(cliente);
+    setClientes((prev) => prev.filter((c) => c.id !== cliente.id));
+    setTotal((prev) => Math.max(0, prev - 1));
+  };
+
+  const handleExcluirTodos = async () => {
+    const confirmacao = window.prompt(
+      `ATENCAO: isso vai apagar TODOS os ${total} clientes cadastrados, junto com todas as vendas e agendamentos.\n\nEssa acao NAO PODE ser desfeita.\n\nPara confirmar, digite EXCLUIR TUDO (em maiusculas) abaixo:`
+    );
+    if (confirmacao !== 'EXCLUIR TUDO') {
+      if (confirmacao !== null) alert('O texto digitado nao confere. Nada foi excluido.');
+      return;
+    }
+    setExcluindoTodos(true);
+    try {
+      await onExcluirTodos();
+      setClientes([]);
+      setTotal(0);
+    } finally {
+      setExcluindoTodos(false);
+    }
+  };
+
   return (
     <GlassPanel className="p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-medium text-ivory">
           Clientes cadastrados <span className="text-muted">({total})</span>
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={onAbrirImportacao}
             className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[11px] text-muted transition-colors hover:text-ivory"
@@ -241,7 +297,7 @@ export function ClientesView({
             <Upload size={12} />
             Importar
           </button>
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- download de arquivo, não navegação */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- download de arquivo, nao navegacao */}
           <a
             href="/api/clientes/export"
             className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[11px] text-muted transition-colors hover:text-ivory"
@@ -249,6 +305,14 @@ export function ClientesView({
             <Download size={12} />
             Exportar CSV
           </a>
+          <button
+            onClick={handleExcluirTodos}
+            disabled={excluindoTodos || total === 0}
+            className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-medium text-red-300 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+          >
+            {excluindoTodos ? <Loader2 size={12} className="animate-spin" /> : <AlertTriangle size={12} />}
+            {excluindoTodos ? 'Excluindo...' : 'Excluir tudo'}
+          </button>
           <label className="flex items-center gap-1.5 text-[11px] text-muted">
             <input
               type="checkbox"
@@ -263,24 +327,27 @@ export function ClientesView({
             <input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar por nome, médico ou telefone…"
+              placeholder="Buscar por nome, medico ou telefone..."
               className="w-48 bg-transparent text-xs text-ivory outline-none"
             />
             {buscando && <Loader2 size={12} className="animate-spin text-muted" />}
           </div>
         </div>
       </div>
-
       <div className="space-y-2">
         {clientes.map((c) => (
-          <LinhaCliente key={c.id} cliente={c} onEditar={onEditar} onArquivar={handleArquivar} />
+          <LinhaCliente
+            key={c.id}
+            cliente={c}
+            onEditar={onEditar}
+            onArquivar={handleArquivar}
+            onExcluir={handleExcluir}
+          />
         ))}
-
         {clientes.length === 0 && !buscando && (
           <p className="py-8 text-center text-xs text-muted">Nenhum cliente encontrado.</p>
         )}
       </div>
-
       {temMais && (
         <button
           onClick={carregarMais}
@@ -288,7 +355,7 @@ export function ClientesView({
           className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-lg border border-line py-2 text-xs font-medium text-muted transition-colors hover:text-ivory disabled:opacity-60"
         >
           {carregandoMais ? <Loader2 size={13} className="animate-spin" /> : null}
-          {carregandoMais ? 'Carregando…' : 'Carregar mais clientes'}
+          {carregandoMais ? 'Carregando...' : 'Carregar mais clientes'}
         </button>
       )}
     </GlassPanel>
